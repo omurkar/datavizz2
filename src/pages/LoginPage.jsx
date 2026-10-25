@@ -74,7 +74,7 @@ function ErrorBanner({ message }) {
 
 // ── Main Login Page ───────────────────────────────────────────
 export default function LoginPage() {
-  const { loginWithGoogle, signInWithEmail, signUpWithEmail, sendPasswordReset } = useAuth();
+  const { loginWithGoogle, signInWithEmail, signUpWithEmail, sendPasswordReset, authError } = useAuth();
   const { isDark, toggle } = useTheme();
 
   // tab: 'signin' | 'signup' | 'reset'
@@ -88,6 +88,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  useEffect(() => {
+    if (authError) {
+      setError(friendlyError({ message: authError }));
+    }
+  }, [authError]);
 
   const clearForm = () => {
     setEmail(''); setPassword(''); setDisplayName(''); setConfirmPassword('');
