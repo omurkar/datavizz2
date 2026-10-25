@@ -134,12 +134,13 @@ export default function DynamicChart({
 
   // ── Render by type ───────────────────────────────────────────
   let chartEl = null;
+  const defaultMargin = { top: 12, right: 20, bottom: 24, left: 16 };
 
   if (type === 'line') {
     chartEl = withContainer(
       <LineChart
         data={data}
-        margin={{ top: 4, right: 16, bottom: 4, left: 0 }}
+        margin={defaultMargin}
         onClick={(e) => {
           if (e && e.activePayload && e.activePayload[0]) {
             handleItemClick(e.activePayload[0].payload, e);
@@ -147,8 +148,8 @@ export default function DynamicChart({
         }}
       >
         <CartesianGrid {...gridStyle} />
-        <XAxis dataKey="name" {...axisStyle} tickFormatter={shortTick} />
-        <YAxis {...axisStyle} tickFormatter={shortTick} />
+        <XAxis dataKey="name" {...axisStyle} tickFormatter={shortTick} tickMargin={8} />
+        <YAxis {...axisStyle} tickFormatter={shortTick} width={48} tickMargin={8} />
         <Tooltip content={<CustomTooltip />} />
         <Line
           type="monotone" dataKey="value" stroke={PALETTE[0]}
@@ -160,7 +161,7 @@ export default function DynamicChart({
     chartEl = withContainer(
       <AreaChart
         data={data}
-        margin={{ top: 4, right: 16, bottom: 4, left: 0 }}
+        margin={defaultMargin}
         onClick={(e) => {
           if (e && e.activePayload && e.activePayload[0]) {
             handleItemClick(e.activePayload[0].payload, e);
@@ -174,8 +175,8 @@ export default function DynamicChart({
           </linearGradient>
         </defs>
         <CartesianGrid {...gridStyle} />
-        <XAxis dataKey="name" {...axisStyle} tickFormatter={shortTick} />
-        <YAxis {...axisStyle} tickFormatter={shortTick} />
+        <XAxis dataKey="name" {...axisStyle} tickFormatter={shortTick} tickMargin={8} />
+        <YAxis {...axisStyle} tickFormatter={shortTick} width={48} tickMargin={8} />
         <Tooltip content={<CustomTooltip />} />
         <Area
           type="monotone" dataKey="value" stroke={PALETTE[0]} strokeWidth={2.5}
@@ -187,12 +188,12 @@ export default function DynamicChart({
     chartEl = withContainer(
       <BarChart
         data={data}
-        margin={{ top: 4, right: 16, bottom: 4, left: 0 }}
+        margin={defaultMargin}
         barSize={Math.min(32, Math.floor(600 / Math.max(data.length, 1)))}
       >
         <CartesianGrid {...gridStyle} vertical={false} />
-        <XAxis dataKey="name" {...axisStyle} tickFormatter={shortTick} />
-        <YAxis {...axisStyle} tickFormatter={shortTick} />
+        <XAxis dataKey="name" {...axisStyle} tickFormatter={shortTick} tickMargin={8} />
+        <YAxis {...axisStyle} tickFormatter={shortTick} width={48} tickMargin={8} />
         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
         <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer">
           {data.map((entry, i) => {
@@ -215,7 +216,7 @@ export default function DynamicChart({
   } else if (type === 'scatter') {
     chartEl = withContainer(
       <ScatterChart
-        margin={{ top: 4, right: 16, bottom: 4, left: 0 }}
+        margin={defaultMargin}
         onClick={(e) => {
           if (e && e.activePayload && e.activePayload[0]) {
             handleItemClick(e.activePayload[0].payload, e);
@@ -223,15 +224,15 @@ export default function DynamicChart({
         }}
       >
         <CartesianGrid {...gridStyle} />
-        <XAxis dataKey="x" name={xAxis} {...axisStyle} tickFormatter={shortTick} />
-        <YAxis dataKey="y" name={yAxis} {...axisStyle} tickFormatter={shortTick} />
+        <XAxis dataKey="x" name={xAxis} {...axisStyle} tickFormatter={shortTick} tickMargin={8} />
+        <YAxis dataKey="y" name={yAxis} {...axisStyle} tickFormatter={shortTick} width={48} tickMargin={8} />
         <Tooltip content={<ScatterTooltip />} cursor={{ strokeDasharray: '3 3' }} />
         <Scatter data={data} fill={PALETTE[1]} opacity={0.8} cursor="pointer" />
       </ScatterChart>
     );
   } else if (type === 'pie') {
     chartEl = withContainer(
-      <PieChart>
+      <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
         <Pie
           data={data}
           dataKey="value"
@@ -271,10 +272,10 @@ export default function DynamicChart({
   } else {
     // Fallback to bar for unknown types
     chartEl = withContainer(
-      <BarChart data={data} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+      <BarChart data={data} margin={defaultMargin}>
         <CartesianGrid {...gridStyle} />
-        <XAxis dataKey="name" {...axisStyle} />
-        <YAxis {...axisStyle} />
+        <XAxis dataKey="name" {...axisStyle} tickMargin={8} />
+        <YAxis {...axisStyle} width={48} tickMargin={8} />
         <Tooltip content={<CustomTooltip />} />
         <Bar dataKey="value" fill={PALETTE[0]} radius={[4, 4, 0, 0]} />
       </BarChart>

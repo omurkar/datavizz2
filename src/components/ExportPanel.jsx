@@ -12,36 +12,90 @@ export default function ExportPanel({ onClose, dashboardRef }) {
 
   const exportPDF = async () => {
     setExporting(true); setDone(''); setError('');
+    const prevScrollX = window.scrollX;
+    const prevScrollY = window.scrollY;
     try {
+      // Scroll to (0,0) before snapshot to eliminate bounding box viewport clipping
+      window.scrollTo(0, 0);
+
       const html2canvas = (await import('html2canvas')).default;
       const { jsPDF } = await import('jspdf');
 
       const target = dashboardRef?.current || document.querySelector('[data-dashboard]') || document.body;
       const canvas = await html2canvas(target, {
-        scale: 1.5, useCORS: true, logging: false,
+        scale: 2,
+        useCORS: true,
+        logging: false,
         backgroundColor: '#0f172a',
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: document.documentElement.scrollWidth,
+        windowHeight: document.documentElement.scrollHeight,
+        onclone: (clonedDoc) => {
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `
+            * {
+              animation: none !important;
+              transition: none !important;
+            }
+          `;
+          clonedDoc.head.appendChild(style);
+        },
       });
 
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [canvas.width, canvas.height] });
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      const margin = 24; // Generous document margins
+      const contentWidth = canvas.width;
+      const contentHeight = canvas.height;
+      const pageWidth = contentWidth + margin * 2;
+      const pageHeight = contentHeight + margin * 2;
+      const isLandscape = pageWidth >= pageHeight;
+
+      const pdf = new jsPDF({
+        orientation: isLandscape ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: [pageWidth, pageHeight],
+        hotfixes: ['px_scaling'],
+      });
+
+      pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
       pdf.save('DataViz-Pro-Dashboard.pdf');
       setDone('PDF exported successfully!');
     } catch (e) {
       setError('Export failed: ' + e.message);
     } finally {
+      window.scrollTo(prevScrollX, prevScrollY);
       setExporting(false);
     }
   };
 
   const exportPNG = async () => {
     setExporting(true); setDone(''); setError('');
+    const prevScrollX = window.scrollX;
+    const prevScrollY = window.scrollY;
     try {
+      window.scrollTo(0, 0);
       const html2canvas = (await import('html2canvas')).default;
       const target = dashboardRef?.current || document.querySelector('[data-dashboard]') || document.body;
       const canvas = await html2canvas(target, {
-        scale: 2, useCORS: true, logging: false,
+        scale: 2,
+        useCORS: true,
+        logging: false,
         backgroundColor: '#0f172a',
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: document.documentElement.scrollWidth,
+        windowHeight: document.documentElement.scrollHeight,
+        onclone: (clonedDoc) => {
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `
+            * {
+              animation: none !important;
+              transition: none !important;
+            }
+          `;
+          clonedDoc.head.appendChild(style);
+        },
       });
       const link = document.createElement('a');
       link.download = 'DataViz-Pro-Dashboard.png';
@@ -51,6 +105,7 @@ export default function ExportPanel({ onClose, dashboardRef }) {
     } catch (e) {
       setError('Export failed: ' + e.message);
     } finally {
+      window.scrollTo(prevScrollX, prevScrollY);
       setExporting(false);
     }
   };

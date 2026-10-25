@@ -109,11 +109,13 @@ function SessionRow({ session, onClick }) {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: '600', fontSize: '0.875rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {session.tableName || session.fileName || 'Untitled Dataset'}
+          {session.tableName || session.table || session.fileName || session.database || 'Untitled Dataset'}
         </div>
         <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Clock size={11} /> {timeAgo}
-          {session.rowCount && <><span>·</span> {session.rowCount.toLocaleString()} rows</>}
+          {(session.rowCount || session.cleanRows || session.originalRows) ? (
+            <><span>·</span> {(session.rowCount || session.cleanRows || session.originalRows).toLocaleString()} rows</>
+          ) : null}
         </div>
       </div>
       <ChevronRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
@@ -189,8 +191,8 @@ export default function MainDashboard() {
     navigate('/');
   };
 
-  const totalRows = sessions.reduce((acc, s) => acc + (s.rowCount || 0), 0);
-  const chartsBuilt = sessions.reduce((acc, s) => acc + (s.chartConfigs?.length || 0), 0);
+  const totalRows = sessions.reduce((acc, s) => acc + (s.rowCount || s.cleanRows || s.originalRows || 0), 0);
+  const chartsBuilt = sessions.reduce((acc, s) => acc + (s.chartConfigs?.length || s.charts?.length || (s.autoDashboard?.charts?.length) || 0), 0);
 
   const metrics = [
     {

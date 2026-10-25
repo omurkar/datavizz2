@@ -52,8 +52,8 @@ const CHART_OPTIONS_MULTI = [
 
 export default function DashboardView() {
   const navigate = useNavigate();
-  const { cleanData, columns, chartConfigs, setChartConfigs, dashboardSettings, setDashboardSettings, tableName, currentSessionId } = useData();
-  const { updateSession } = useAuth();
+  const { cleanData, columns, chartConfigs, setChartConfigs, dashboardSettings, setDashboardSettings, tableName, currentSessionId, setCurrentSessionId } = useData();
+  const { updateSession, saveSession } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarTab, setSidebarTab] = useState('chart'); // chart, layout
   const [selectedChartIdx, setSelectedChartIdx] = useState(null);
@@ -75,30 +75,61 @@ export default function DashboardView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Save chartConfigs to Firestore session whenever they change
+  // Save chartConfigs to session history whenever they change
   const chartConfigsSaveRef = useRef(false);
   useEffect(() => {
-    if (currentSessionId && chartConfigs.length > 0 && cleanData) {
+    if (chartConfigs.length > 0 && cleanData) {
       // Debounce to avoid saving on every rapid change
       const timer = setTimeout(async () => {
         try {
-          await updateSession(currentSessionId, {
-            chartConfigs: chartConfigs.map(c => ({
-              columns: c.columns,
-              chartType: c.chartType,
-              chartLabel: c.chartLabel,
-              id: c.id,
-            })),
-            dashboardSettings,
-          });
+          const resolvedName = tableName || 'Custom Dashboard';
+          const configs = chartConfigs.map(c => ({
+            columns: c.columns,
+            chartType: c.chartType,
+            chartLabel: c.chartLabel,
+            id: c.id,
+          }));
+
+          if (currentSessionId) {
+            await updateSession(currentSessionId, {
+              chartConfigs: configs,
+              dashboardSettings,
+              dashboardType: 'custom',
+              tableName: resolvedName,
+              table: resolvedName,
+              database: resolvedName,
+              rowCount: cleanData.length,
+              cleanRows: cleanData.length,
+              updatedAt: new Date().toISOString(),
+            });
+          } else {
+            const sid = await saveSession({
+              database: resolvedName,
+              table: resolvedName,
+              tableName: resolvedName,
+              fileName: resolvedName,
+              originalRows: cleanData.length,
+              cleanRows: cleanData.length,
+              rowCount: cleanData.length,
+              trashRows: 0,
+              columns: columns || [],
+              cleanData: cleanData.slice(0, 300),
+              chartConfigs: configs,
+              dashboardSettings,
+              dashboardType: 'custom',
+              createdAt: new Date().toISOString(),
+            });
+            if (sid) {
+              setCurrentSessionId(sid);
+            }
+          }
         } catch (e) {
           console.warn('Failed to save chart configs to session:', e);
         }
       }, 1000);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartConfigs, dashboardSettings, currentSessionId]);
+  }, [chartConfigs, dashboardSettings, currentSessionId, cleanData, columns, tableName, updateSession, saveSession, setCurrentSessionId]);
 
   // Aggregate data for a chart config
   const getChartData = useCallback((config) => {

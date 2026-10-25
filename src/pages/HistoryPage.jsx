@@ -202,7 +202,10 @@ function SummaryModal({ session, onClose }) {
 export default function HistoryPage() {
   const navigate = useNavigate();
   const { getSessions, user } = useAuth();
-  const { setCleanData, setColumns, setTableName, setChartConfigs, setEdaSummary, setCurrentSessionId } = useData();
+  const {
+    setCleanData, setColumns, setTableName, setChartConfigs,
+    setEdaSummary, setCurrentSessionId, setAutoDashboard, setAutoDashboardStatus,
+  } = useData();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [summarySession, setSummarySession] = useState(null); // session to show in modal
@@ -234,7 +237,7 @@ export default function HistoryPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${session.database}_${session.table}.csv`;
+    a.download = `${session.database || session.table || 'export'}_${session.table || 'data'}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -248,7 +251,8 @@ export default function HistoryPage() {
     // Restore data into context
     setCleanData(session.cleanData);
     setColumns(session.columns || Object.keys(session.cleanData[0] || {}));
-    setTableName(session.table || session.database);
+    const name = session.tableName || session.table || session.database || 'Dataset';
+    setTableName(name);
 
     // Restore edaSummary if available
     if (session.edaSummary) {
@@ -257,15 +261,26 @@ export default function HistoryPage() {
       setEdaSummary(session.summary);
     }
 
-    // Restore session ID so DashboardView can continue saving updates
+    // Restore session ID so updates persist to this session
     setCurrentSessionId(session.id);
 
-    // ── KEY FIX: Use saved chartConfigs from session, NOT auto-generated ones ──
+    // Restore autoDashboard if it exists
+    if (session.autoDashboard) {
+      setAutoDashboard(session.autoDashboard);
+      setAutoDashboardStatus('done');
+    }
+
     if (session.chartConfigs && session.chartConfigs.length > 0) {
-      // Use the exact same charts the user built
       setChartConfigs(session.chartConfigs);
+    } else if (session.charts && session.charts.length > 0) {
+      setChartConfigs(session.charts.map(c => ({
+        id: c.id,
+        chartType: c.type,
+        chartLabel: c.title,
+        columns: [c.xAxis, c.yAxis].filter(Boolean),
+        config: c,
+      })));
     } else {
-      // Fallback: auto-generate only if no saved configs exist
       const cols = session.columns || Object.keys(session.cleanData[0] || {});
       const autoConfigs = [];
       if (cols.length >= 1) {
@@ -280,7 +295,11 @@ export default function HistoryPage() {
       setChartConfigs(autoConfigs);
     }
 
-    navigate('/dashboard-view');
+    if (session.dashboardType === 'auto' || session.autoDashboard) {
+      navigate('/auto-dashboard');
+    } else {
+      navigate('/dashboard-view');
+    }
   };
 
   const formatDate = (dateStr) => {
@@ -333,17 +352,21 @@ export default function HistoryPage() {
                       <Database size={20} color="var(--accent-primary)" />
                     </div>
                     <div>
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>{session.database}</h3>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Table: {session.table}</p>
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>
+                        {session.tableName || session.database || session.table || 'Dataset'}
+                      </h3>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                        Table / Source: {session.table || session.tableName || session.database || 'Uploaded Data'}
+                      </p>
                     </div>
                     {/* Badge if this session has saved charts */}
-                    {session.chartConfigs && session.chartConfigs.length > 0 && (
+                    {((session.chartConfigs && session.chartConfigs.length > 0) || (session.charts && session.charts.length > 0)) && (
                       <span style={{
                         marginLeft: '8px', padding: '3px 10px',
                         background: 'rgba(0,184,148,0.12)', border: '1px solid rgba(0,184,148,0.25)',
                         borderRadius: '20px', fontSize: '0.72rem', fontWeight: '600', color: 'var(--success)',
                       }}>
-                        {session.chartConfigs.length} chart{session.chartConfigs.length > 1 ? 's' : ''} saved
+                        {session.chartConfigs?.length || session.charts?.length} chart{(session.chartConfigs?.length || session.charts?.length) > 1 ? 's' : ''} saved
                       </span>
                     )}
                   </div>
@@ -353,7 +376,7 @@ export default function HistoryPage() {
                       <Calendar size={14} /> {formatDate(session.createdAt)}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                      <Rows3 size={14} /> {session.originalRows || '—'} → {session.cleanRows || '—'} rows
+                      <Rows3 size={14} /> {session.originalRows || session.cleanRows || '—'} → {session.cleanRows || session.rowCount || '—'} rows
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
                       <Columns size={14} /> {session.columns?.length || '—'} columns

@@ -76,19 +76,24 @@ export default function EdaPage() {
         }
         setStep('done');
 
-        // Save session to Firestore (with full summary and more data for history)
+        // Save session to history (Firestore + LocalStorage)
         try {
+          const resolvedName = tableName || dbConfig.database || 'Dataset';
           const sessionId = await saveSession({
-            database: dbConfig.database,
-            table: tableName,
-            host: dbConfig.host,
+            database: dbConfig.database || resolvedName,
+            table: tableName || resolvedName,
+            tableName: resolvedName,
+            fileName: resolvedName,
+            host: dbConfig.host || 'localhost',
             originalRows: rawData.length,
             cleanRows: edaData.cleanData.length,
+            rowCount: edaData.cleanData.length,
             trashRows: edaData.trashData.length,
             columns,
-            cleanData: edaData.cleanData.slice(0, 500),
+            cleanData: edaData.cleanData.slice(0, 300),
             summary: edaData.summary,
             edaSummary: { ...edaData.summary, edaStats: edaData.edaStats || {} },
+            createdAt: new Date().toISOString(),
           });
           if (sessionId) {
             setCurrentSessionId(sessionId);

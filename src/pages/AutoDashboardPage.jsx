@@ -26,18 +26,16 @@ import 'react-resizable/css/styles.css';
 import DynamicChart from '../components/DynamicChart';
 import ChatToChart from '../components/ChatToChart';
 import AnomalyDetector from '../components/AnomalyDetector';
-import CalcFieldBuilder from '../components/CalcFieldBuilder';
-import TransformLineage from '../components/TransformLineage';
 import ExportPanel from '../components/ExportPanel';
 import CodeViewer from '../components/CodeViewer';
 import AlertsManager from '../components/AlertsManager';
 import AnnotationPanel from '../components/AnnotationPanel';
 
 import {
-  BarChart3, Sparkles, Settings2, Trash2, Plus, ArrowLeft,
+  BarChart3, Sparkles, Settings2, Trash2, ArrowLeft,
   Sun, Moon, LogOut, TrendingUp, Activity, Database, RefreshCw,
   GripVertical, X, CheckCircle2, Zap, Brain, MessageSquare,
-  AlertTriangle, Calculator, GitBranch, Download, Bell, Code2,
+  AlertTriangle, Download, Bell, Code2,
   Filter, Presentation, ChevronRight, Layers,
 } from 'lucide-react';
 
@@ -164,7 +162,7 @@ function ChartTile({ config, editMode, onDelete, onViewCode, onAnnotate, style }
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
-        overflow: 'hidden',
+        overflow: 'visible',
         ...style,
       }}
     >
@@ -210,7 +208,7 @@ const COLS = 12;
 
 export default function AutoDashboardPage() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, saveSession, updateSession } = useAuth();
   const { isDark, toggle } = useTheme();
   const {
     cleanData, columns, tableName, dataSource,
@@ -218,6 +216,7 @@ export default function AutoDashboardPage() {
     autoDashboardStatus, setAutoDashboardStatus,
     autoDashboardError, setAutoDashboardError,
     editModeActive, setEditModeActive,
+    currentSessionId, setCurrentSessionId,
   } = useData();
 
   const filterContext = useFilters();
@@ -237,7 +236,7 @@ export default function AutoDashboardPage() {
   );
 
   // Advanced features modals state
-  const [activeModal, setActiveModal] = useState(null); // 'chat' | 'anomaly' | 'calc' | 'lineage' | 'export' | 'alerts'
+  const [activeModal, setActiveModal] = useState(null); // 'chat' | 'anomaly' | 'export' | 'alerts'
   const [codeViewerChart, setCodeViewerChart] = useState(null);
   const [annotationState, setAnnotationState] = useState(null);
   const dashboardRef = useRef(null);
@@ -263,10 +262,66 @@ export default function AutoDashboardPage() {
       if (!json.success) throw new Error(json.error || 'Dashboard generation failed');
 
       setAutoDashboard(json.dashboard);
-      setCharts(json.dashboard.charts || []);
-      setKpiCards(json.dashboard.kpi_cards || []);
-      setEngineUsed(json.dashboard.meta?.engine || 'heuristic');
-      setMetaInfo(json.dashboard.meta || null);
+      const generatedCharts = json.dashboard.charts || [];
+      const generatedKpis = json.dashboard.kpi_cards || [];
+      const generatedMeta = json.dashboard.meta || null;
+      setCharts(generatedCharts);
+      setKpiCards(generatedKpis);
+      setEngineUsed(generatedMeta?.engine || 'heuristic');
+      setMetaInfo(generatedMeta);
+
+      // Save/persist into History so the dashboard is immediately stored
+      const chartConfigsList = generatedCharts.map(c => ({
+        id: c.id,
+        chartType: c.type,
+        chartLabel: c.title,
+        columns: [c.xAxis, c.yAxis].filter(Boolean),
+        config: c,
+      }));
+
+      const resolvedName = tableName || 'Auto Dashboard';
+      try {
+        if (currentSessionId) {
+          await updateSession(currentSessionId, {
+            autoDashboard: json.dashboard,
+            charts: generatedCharts,
+            chartConfigs: chartConfigsList,
+            kpiCards: generatedKpis,
+            dashboardType: 'auto',
+            tableName: resolvedName,
+            table: resolvedName,
+            database: resolvedName,
+            rowCount: data.length,
+            cleanRows: data.length,
+            updatedAt: new Date().toISOString(),
+          });
+        } else {
+          const sid = await saveSession({
+            database: resolvedName,
+            table: resolvedName,
+            tableName: resolvedName,
+            fileName: resolvedName,
+            originalRows: data.length,
+            cleanRows: data.length,
+            rowCount: data.length,
+            trashRows: 0,
+            columns: cols || [],
+            cleanData: data.slice(0, 300),
+            autoDashboard: json.dashboard,
+            charts: generatedCharts,
+            chartConfigs: chartConfigsList,
+            kpiCards: generatedKpis,
+            dashboardType: 'auto',
+            metaInfo: generatedMeta,
+            createdAt: new Date().toISOString(),
+          });
+          if (sid) {
+            setCurrentSessionId(sid);
+          }
+        }
+      } catch (saveErr) {
+        console.warn('Failed to save auto-dashboard to history:', saveErr);
+      }
 
       // Build initial grid layout
       const initialLayout = (json.dashboard.charts || []).map((c, i) => ({
@@ -284,7 +339,7 @@ export default function AutoDashboardPage() {
       setAutoDashboardError(err.message);
       setAutoDashboardStatus('error');
     }
-  }, [setAutoDashboard, setAutoDashboardStatus, setAutoDashboardError]);
+  }, [setAutoDashboard, setAutoDashboardStatus, setAutoDashboardError, currentSessionId, saveSession, updateSession, setCurrentSessionId, tableName]);
 
   // Trigger on mount if data is available
   useEffect(() => {
@@ -311,27 +366,30 @@ export default function AutoDashboardPage() {
   const handleLoadingDone = () => setShowLoading(false);
 
   const handleDeleteChart = (chartId) => {
-    setCharts(prev => prev.filter(c => c.id !== chartId));
+    setCharts(prev => {
+      const updated = prev.filter(c => c.id !== chartId);
+      if (currentSessionId) {
+        updateSession(currentSessionId, {
+          charts: updated,
+          chartConfigs: updated.map(c => ({
+            id: c.id,
+            chartType: c.type,
+            chartLabel: c.title,
+            columns: [c.xAxis, c.yAxis].filter(Boolean),
+            config: c,
+          })),
+        }).catch(err => console.warn('Failed to update session after chart delete:', err));
+      }
+      return updated;
+    });
     setLayout(prev => prev.filter(l => l.i !== chartId));
   };
 
   const handleRefresh = () => fetchDashboard(cleanData, columns);
 
-  // ── Nav helpers ───────────────────────────────────────────
-  const navLinks = [
-    { label: 'Overview',   path: '/dashboard' },
-    { label: 'Connect',    path: '/connect' },
-    { label: 'EDA',        path: '/eda' },
-    { label: 'Auto Viz',   path: '/auto-dashboard', active: true },
-    { label: 'Custom',     path: '/customize' },
-    { label: 'History',    path: '/history' },
-  ];
-
   const toolbarButtons = [
     { id: 'chat', label: 'Ask AI (Chat)', icon: <MessageSquare size={13} />, color: '#7c3aed', badge: 'LLM' },
     { id: 'anomaly', label: 'Anomaly Scan', icon: <Activity size={13} />, color: '#ef4444' },
-    { id: 'calc', label: 'Calculated Field', icon: <Calculator size={13} />, color: '#10b981' },
-    { id: 'lineage', label: 'Data Lineage', icon: <GitBranch size={13} />, color: '#3b82f6' },
     { id: 'alerts', label: 'Threshold Alerts', icon: <Bell size={13} />, color: '#f59e0b' },
     { id: 'export', label: 'Export Deck', icon: <Download size={13} />, color: '#8b5cf6' },
   ];
@@ -339,30 +397,17 @@ export default function AutoDashboardPage() {
   // ─────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
-      {/* Top Nav */}
+      {/* Top Nav (Clean navigation bar without tab buttons) */}
       <nav style={{
         position: 'sticky', top: 0, zIndex: 100,
-        display: 'flex', alignItems: 'center', gap: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 24px', height: 58,
         background: 'var(--surface)', borderBottom: '1px solid var(--border)',
         backdropFilter: 'blur(16px)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <BarChart3 size={22} color="#7c3aed" />
           <span style={{ fontWeight: 800, fontSize: '1rem', letterSpacing: '-0.01em' }}>DataViz Pro</span>
-        </div>
-
-        <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-          {navLinks.map(l => (
-            <button key={l.path} onClick={() => navigate(l.path)} style={{
-              background: l.active ? 'rgba(124,58,237,0.15)' : 'none',
-              border: 'none', borderRadius: 8, padding: '6px 14px',
-              color: l.active ? '#7c3aed' : 'var(--text-muted)',
-              fontWeight: l.active ? 700 : 500, fontSize: '0.85rem', cursor: 'pointer',
-            }}>
-              {l.label}
-            </button>
-          ))}
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -459,12 +504,6 @@ export default function AutoDashboardPage() {
                 >
                   <Settings2 size={14} />
                   {editModeActive ? 'Done Editing' : 'Edit Layout'}
-                </button>
-                <button onClick={() => navigate('/customize')} className="btn-primary" style={{
-                  borderRadius: 10, padding: '8px 16px', fontSize: '0.82rem',
-                  display: 'flex', alignItems: 'center', gap: 6,
-                }}>
-                  <Plus size={14} /> Add Chart
                 </button>
               </div>
             </div>
@@ -588,7 +627,7 @@ export default function AutoDashboardPage() {
             )}
 
             {/* ── Capturable Dashboard Area (for Feature 6 Presentation Export) ── */}
-            <div ref={dashboardRef} data-dashboard style={{ padding: '4px 0' }}>
+            <div ref={dashboardRef} data-dashboard style={{ padding: '20px 24px', borderRadius: 16 }}>
               {/* ── KPI Strip ── */}
               {kpiCards.length > 0 && (
                 <div style={{
@@ -693,22 +732,7 @@ export default function AutoDashboardPage() {
       {activeModal === 'anomaly' && (
         <AnomalyDetector onClose={() => setActiveModal(null)} />
       )}
-      {activeModal === 'calc' && (
-        <CalcFieldBuilder
-          onClose={() => {
-            setActiveModal(null);
-            handleRefresh();
-          }}
-        />
-      )}
-      {activeModal === 'lineage' && (
-        <TransformLineage
-          onClose={() => {
-            setActiveModal(null);
-            handleRefresh();
-          }}
-        />
-      )}
+
       {activeModal === 'alerts' && (
         <AlertsManager onClose={() => setActiveModal(null)} />
       )}
