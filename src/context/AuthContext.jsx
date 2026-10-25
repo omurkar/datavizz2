@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, googleProvider, db } from '../firebase';
 import {
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signOut,
   onAuthStateChanged,
   createUserWithEmailAndPassword,
@@ -18,33 +17,12 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
-// Named export for direct usage:
-export const handleGoogleSignIn = () => {
-  return signInWithRedirect(auth, googleProvider);
-};
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
-    // Process redirect result if returning from Google sign-in redirect
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result?.user) {
-          await _ensureUserProfile(result.user);
-        }
-      })
-      .catch((err) => {
-        console.error('Redirect authentication error:', err);
-        setAuthError(err.message);
-      });
-
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        await _ensureUserProfile(firebaseUser).catch(console.error);
-      }
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
     });
@@ -52,8 +30,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ── Google OAuth ─────────────────────────────────────
-  const loginWithGoogle = () => {
-    return handleGoogleSignIn();
+  const loginWithGoogle = async () => {
+    const result = await signInWithPopup(auth, googleProvider);
+    await _ensureUserProfile(result.user);
+    return result.user;
   };
 
   // ── Email / Password Sign-Up ─────────────────────────
@@ -242,9 +222,7 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     loading,
-    authError,
     loginWithGoogle,
-    handleGoogleSignIn,
     signUpWithEmail,
     signInWithEmail,
     sendPasswordReset,
